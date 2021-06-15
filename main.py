@@ -14,7 +14,7 @@ vulns = {}
 
 access_table = {}
 
-G = nx.DiGraph()
+G = nx.Graph()
 nodes = []
 
 
@@ -32,10 +32,28 @@ def validate_ip(ip_string):
 
 
 def read_files():
+    with open("vulnerabilities.txt", "r") as vulns_f:
+        for line in vulns_f:
+            host, value = line.strip().split(":")
+            vulns[host] = value.strip()
+
     with open("topology.txt", "r") as topology_f:
         for line in topology_f:
             key, value = line.strip().split(":")
-            topology[validate_ip(key)] = value.strip().split(", ")
+            topology[validate_ip(key)] = 0
+            for vuln in value.strip().split(", "):
+                vuln = vuln.strip()
+                if vulns[vuln] == 'root':
+                    current_level = 4
+                elif vulns[vuln] == 'user':
+                    current_level = 3
+                elif vulns[vuln] == 'doc':
+                    current_level = 2
+                elif vulns[vuln] == 'other':
+                    current_level = 1
+
+                if current_level > topology[validate_ip(key)]:
+                    topology[validate_ip(key)] = current_level
 
     with open("hosts.txt", "r") as hosts_f:
         current_key = ""
@@ -64,25 +82,24 @@ def read_files():
             else:
                 current_key = ""
 
-    with open("vulnerabilities.txt", "r") as vulns_f:
-        for line in vulns_f:
-            host, value = line.strip().split(":")
-            vulns[host] = value.strip()
-
 
 def draw_graph():
     G.add_nodes_from(nodes)
 
     for host in access_table.keys():
         for other_host in access_table[host]:
-            G.add_edge(host, other_host)
+            G.add_edge(host, other_host, color='black')
 
-    pos = nx.spring_layout(G)
+    G.add_edge('192.168.134.1', '192.168.134.2', color='red')
+
+    pos = nx.circular_layout(G)
     plt.figure(figsize=(len(nodes) * 2, len(nodes) * 2 - 2))
+
+    colors = [G[u][v]['color'] for u, v in G.edges]
     nx.draw_networkx_nodes(G, pos, node_size=2000)
-    # pprint(list(G.edges)[0])
-    nx.draw_networkx_edges(G, pos, edgelist=G.edges)
+    nx.draw_networkx_edges(G, pos, edgelist=G.edges, edge_color=colors)
     nx.draw_networkx_labels(G, pos)
+
     plt.axis('off')
     plt.show()
 
@@ -113,6 +130,8 @@ def create_access_table():
 
 def main():
     try:
+        # init_host = validate_ip(input())
+
         read_files()
         create_access_table()
         draw_graph()
